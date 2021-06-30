@@ -514,7 +514,6 @@ def DecodeAndVis(imagegraph, filename, imagesize=256, max_degree=6, thr=0.5, edg
 	smooth_kp = smooth_kp / max(np.amax(smooth_kp),0.001)
 
 	keypoints = detect_local_minima(-smooth_kp, smooth_kp, thr)
-
 	cc = 0 
 
 	# Step-1 (b): There could be a case where the local minima detection algorithm fails
@@ -535,12 +534,19 @@ def DecodeAndVis(imagegraph, filename, imagesize=256, max_degree=6, thr=0.5, edg
 
 		x,y = keypoints[0][i], keypoints[1][i]
 
+		if  ~np.isfinite(x) or ~np.isfinite(y):
+			continue
+  
 		for j in range(max_degree):
 
 			if imagegraph[x,y,2+4*j] * imagegraph[x,y,0] > thr * thr: # or thr < 0.2:
 				
-				x1 = int(x + vector_norm * imagegraph[x,y,2+4*j+2])
-				y1 = int(y + vector_norm * imagegraph[x,y,2+4*j+3])
+				if  ~np.isfinite(imagegraph[x,y,2+4*j+2]) or ~np.isfinite(imagegraph[x,y,2+4*j+3]):
+					x1 = int(x)
+					y1 = int(y)
+				else:
+					x1 = int(x + vector_norm * imagegraph[x,y,2+4*j+2])
+					y1 = int(y + vector_norm * imagegraph[x,y,2+4*j+3])
 
 				if x1 >= 0 and x1 < imagesize and y1 >= 0 and y1 < imagesize:
 					edgeEndpointMap[x1,y1] = imagegraph[x,y,2+4*j] * imagegraph[x,y,0]
@@ -603,9 +609,13 @@ def DecodeAndVis(imagegraph, filename, imagesize=256, max_degree=6, thr=0.5, edg
 			# imagegraph[x,y,2+4*j] --> edgeness
 			# imagegraph[x,y,0] --> vertexness
 			if imagegraph[x,y,2+4*j] * imagegraph[x,y,0] > thr*edge_thr and imagegraph[x,y,2+4*j] > edge_thr: 
-				
-				x1 = int(x + vector_norm * imagegraph[x,y,2+4*j+2])
-				y1 = int(y + vector_norm * imagegraph[x,y,2+4*j+3])
+
+				if  ~np.isfinite(imagegraph[x,y,2+4*j+2]) or ~np.isfinite(imagegraph[x,y,2+4*j+3]):
+					x1 = int(x)
+					y1 = int(y)
+				else:
+					x1 = int(x + vector_norm * imagegraph[x,y,2+4*j+2])
+					y1 = int(y + vector_norm * imagegraph[x,y,2+4*j+3])
 
 				skip = False
 
@@ -652,7 +662,11 @@ def DecodeAndVis(imagegraph, filename, imagesize=256, max_degree=6, thr=0.5, edg
 
 						for jj in range(max_degree):
 							if imagegraph[x_c,y_c,2+4*jj] * imagegraph[x_c,y_c,0] > thr*edge_thr and imagegraph[x,y,2+4*jj] > edge_thr:
-								vc = (vector_norm * imagegraph[x_c,y_c,2+4*jj+2], vector_norm * imagegraph[x_c,y_c,2+4*jj+3])
+								
+								if  ~np.isfinite(imagegraph[x,y,2+4*j+2]) or ~np.isfinite(imagegraph[x,y,2+4*j+3]):
+									vc = (0, 0)
+								else:
+									vc = (vector_norm * imagegraph[x_c,y_c,2+4*jj+2], vector_norm * imagegraph[x_c,y_c,2+4*jj+3])
 
 								# cosine distance 
 								ad = 1.0 - anglediff(v0,vc)

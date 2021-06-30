@@ -22,7 +22,7 @@ MAX_DEGREE=6
 
 
 class Sat2GraphModel():
-	def __init__(self, sess, image_size=352, image_ch = 3, downsample_level = 1, batchsize = 8, resnet_step=8, channel=12, mode = "train", joint_with_seg=True):
+	def __init__(self, sess, image_size=352, image_ch = 3, downsample_level = 1, batchsize = 8, resnet_step=8, channel=12, mode = "train", joint_with_seg=False):
 		self.sess = sess 
 		self.train_seg = False
 		self.image_size = image_size
@@ -51,7 +51,7 @@ class Sat2GraphModel():
 
 
 		if self.train_seg:
-			self.linear_output = self.BuildDeepLayerAggregationNetWithResnet(self.input_sat, input_ch = image_ch, output_ch = 2, ch = channel)
+			self.linear_output = self.BuildDeepLayerAggregationNetUNET(self.input_sat, input_ch = image_ch, output_ch = 2, ch = channel)
 
 			num_unet = len(tf.trainable_variables())
 			print("Weights", num_unet)
@@ -59,11 +59,11 @@ class Sat2GraphModel():
 			self.output = tf.nn.softmax(self.linear_output)
 			self.loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(self.input_seg_gt_target, self.linear_output))
 
-			self.train_op = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
+			self.train_op = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-08).minimize(self.loss)
 
 		else:
 			
-			self.imagegraph_output = self.BuildDeepLayerAggregationNetWithResnet(self.input_sat, input_ch = image_ch, output_ch =2 + MAX_DEGREE * 4 + (2 if self.joint_with_seg==True else 0), ch=channel)
+			self.imagegraph_output = self.BuildDeepLayerAggregationNetUNET(self.input_sat, input_ch = image_ch, output_ch =2 + MAX_DEGREE * 4 + (2 if self.joint_with_seg==True else 0), ch=channel)
 
 			x = self.imagegraph_output
 
@@ -85,7 +85,7 @@ class Sat2GraphModel():
 			self.l2loss_grad = tf.gradients(self.loss, tf.trainable_variables())
 			self.l2loss_grad_max = tf.reduce_max(self.l2loss_grad[0])
 			#self.train_op = tf.train.AdamOptimizer(learning_rate=self.lr).apply_gradients(zip(self.l2loss_grad, tf.trainable_variables()))
-			self.train_op = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
+			self.train_op = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-08).minimize(self.loss)
 
 
 		self.sess.run(tf.global_variables_initializer())
@@ -183,7 +183,7 @@ class Sat2GraphModel():
 		imagegraph_target_vectors = self.unstack(imagegraph_target_vector, axis = 3)
 
 		soft_mask = tf.clip_by_value(imagegraph_target_probs[0]-0.01, 0.0, 0.99)
-		soft_mask = soft_mask + 0.01 
+		soft_mask = soft_mask + 0.01
 
 		soft_mask2 = tf.reshape(soft_mask, [self.batchsize, self.image_size, self.image_size])
 
@@ -207,7 +207,6 @@ class Sat2GraphModel():
 		for i in range(MAX_DEGREE):
 			prob_output = tf.concat(imagegraph_outputs[2 + i*4 : 2 + i*4 + 2], axis=3)
 			prob_target = tf.concat(imagegraph_target_probs[2 + i*2 : 2 + i*2 + 2], axis=3)
-
 			#direction_prob_loss += tf.reduce_mean(tf.multiply((self.input_seg_gt+0.5), tf.losses.softmax_cross_entropy(prob_target, prob_output)))
 
 			# only at key points! 
@@ -221,7 +220,6 @@ class Sat2GraphModel():
 		for i in range(MAX_DEGREE):
 			vector_output = tf.concat(imagegraph_outputs[2 + i*4 + 2 : 2 + i*4 + 4], axis=3)
 			vector_target = tf.concat(imagegraph_target_vectors[i*2:i*2+2], axis=3)
-
 			#direction_vector_loss += tf.reduce_mean(tf.square(vector_output - vector_target))
 			
 			# only at key points! 
@@ -234,11 +232,11 @@ class Sat2GraphModel():
 
 			seg_loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(self.input_seg_gt_target, tf.concat([imagegraph_outputs[2+MAX_DEGREE*4], imagegraph_outputs[2+MAX_DEGREE*4+1]], axis=3)))
 
-			return keypoint_prob_loss, direction_prob_loss*10.0, direction_vector_loss * 1000.0 , seg_loss * 0.1
+			return keypoint_prob_loss, direction_prob_loss, direction_vector_loss, seg_loss * 0.1
 		
 		else:
 
-			return keypoint_prob_loss, direction_prob_loss* 10.0, direction_vector_loss * 1000.0, keypoint_prob_loss-keypoint_prob_loss
+			return keypoint_prob_loss, direction_prob_loss, direction_vector_loss, keypoint_prob_loss-keypoint_prob_loss
 
 
 	def Merge(self, imagegraph_target_prob, imagegraph_target_vector):
@@ -337,7 +335,7 @@ class Sat2GraphModel():
 		print("channel: ", ch)
 
 		resnet_step = self.resnet_step
-
+  
 		## 
 		conv1, _, _ = common.create_conv_layer('cnn_l1', net_input, input_ch, ch, kx = 5, ky = 5, stride_x = 1, stride_y = 1, is_training = self.is_training, batchnorm = False)
 		conv2, _, _ = common.create_conv_layer('cnn_l2', conv1, ch, ch*2, kx = 5, ky = 5, stride_x = 2, stride_y = 2, is_training = self.is_training, batchnorm = True)

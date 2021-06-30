@@ -38,10 +38,10 @@ parser.add_argument('-model_recover', action='store', dest='model_recover', type
 
 
 parser.add_argument('-image_size', action='store', dest='image_size', type=int,
-                    help='instance_id ', required =False, default=256)
+                    help='instance_id ', required =False, default=308)
 
 parser.add_argument('-lr', action='store', dest='lr', type=float,
-                    help='learning rate', required =False, default=0.001)
+                    help='learning rate', required =False, default=0.0000001)
 
 parser.add_argument('-lr_decay', action='store', dest='lr_decay', type=float,
                     help='learning rate decay', required =False, default=0.5)
@@ -66,7 +66,7 @@ parser.add_argument('-spacenet', action='store', dest='spacenet', type=str,
                     help='spacenet folder', required =False, default="")
 
 parser.add_argument('-channel', action='store', dest='channel', type=int,
-                    help='channel', required =False, default=12)
+                    help='channel', required =False, default=3)
 
 parser.add_argument('-mode', action='store', dest='mode', type=str,
                     help='mode [train][test][validate]', required =False, default="train")
@@ -81,13 +81,13 @@ from datetime import datetime
 instance_id = args.instance_id + "_" + str(args.image_size) + "_" + str(args.resnet_step) + "_" + "_channel%d" % args.channel
 run = "run-"+datetime.today().strftime('%Y-%m-%d-%H-%M-%S')+"-"+instance_id
 
-
+oilwelldataset = "../data/oilwells"
 osmdataset = "../data/20cities/"
 spacenetdataset = "../data/spacenet/"
 
 image_size = args.image_size
 
-batch_size = 2 # 352 * 352 
+batch_size = 8 # 352 * 352 
 
 # if args.image_size == 384:
 # 	batch_size = 4
@@ -104,7 +104,7 @@ max_degree = 6
 
 Popen("mkdir -p %s" % model_save_folder, shell=True).wait()
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.95)
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.95, allow_growth=True)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 	model = Sat2GraphModel(sess, image_size=image_size, resnet_step = args.resnet_step, batchsize = batch_size, channel = args.channel, mode = args.mode)
 	
@@ -125,7 +125,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 		indrange_test = []
 		indrange_validation = []
 
-		for x in range(180):
+		for x in range(599):
 			if x % 10 < 8 :
 				indrange_train.append(x)
 
@@ -144,15 +144,15 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 		
 
 		if args.mode == "train":
-			dataloader_train = Sat2GraphDataLoaderOSM(osmdataset, indrange_train, imgsize = image_size, preload_tiles = 4, testing = False, random_mask=True)
+			dataloader_train = Sat2GraphDataLoaderOSM(oilwelldataset, indrange_train, imgsize = image_size, preload_tiles = 8, testing = False, random_mask=True)
 			dataloader_train.preload(num=1024)
 
-			dataloader_test = Sat2GraphDataLoaderOSM(osmdataset, indrange_validation, imgsize = image_size, preload_tiles = len(indrange_validation), random_mask=False, testing=True)
+			dataloader_test = Sat2GraphDataLoaderOSM(oilwelldataset, indrange_validation, imgsize = image_size, preload_tiles = len(indrange_validation), random_mask=False, testing=True)
 			dataloader_test.preload(num=128)
 
 
 		else:
-			dataloader = Sat2GraphDataLoaderOSM(osmdataset, [], imgsize = image_size, preload_tiles = 1, random_mask=False)
+			dataloader = Sat2GraphDataLoaderOSM(oilwelldataset, [], imgsize = image_size, preload_tiles = 1, random_mask=False)
 
 			tiles = indrange_test
 			if args.mode == "validate":
@@ -169,7 +169,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 				gt_seg = np.zeros((1,image_size,image_size,1))
 			
 
-				gt_imagegraph = np.zeros((2048,2048,26))
+				gt_imagegraph = np.zeros((924,924,26))
 
 				gt_imagegraph[:,:,0:2] = gt_prob[0,:,:,0:2]
 				for k in range(max_degree):
@@ -178,9 +178,9 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 
 				x, y = 0, 0 
 
-				output = np.zeros((2048+64, 2048+64, 2+4*6 + 2))
+				output = np.zeros((924+64, 924+64, 2+4*6 + 2))
 
-				mask = np.ones((2048+64,2048+64, 2+4*6 + 2)) * 0.001
+				mask = np.ones((924+64,924+64, 2+4*6 + 2)) * 0.001
 				weights = np.ones((image_size,image_size, 2+4*6 + 2)) * 0.001 
 				weights[32:image_size-32,32:image_size-32, :] = 0.5 
 				weights[56:image_size-56,56:image_size-56, :] = 1.0 
@@ -208,16 +208,16 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 
 				output = np.divide(output, mask)
 
-				output = output[32:2048+32,32:2048+32,:]
-				input_sat = input_sat[:,32:2048+32,32:2048+32,:]
+				output = output[32:924+32,32:924+32,:]
+				input_sat = input_sat[:,32:924+32,32:924+32,:]
 
-				output_keypoints_img = (output[:,:,0] * 255.0).reshape((2048,2048)).astype(np.uint8)
+				output_keypoints_img = (output[:,:,0] * 255.0).reshape((924,924)).astype(np.uint8)
 				Image.fromarray(output_keypoints_img).save("outputs/region_%d_output_keypoints.png" % tile_id)
 
-				input_sat_img = ((input_sat[0,:,:,:]+0.5) * 255.0).reshape((2048,2048,3)).astype(np.uint8)
+				input_sat_img = ((input_sat[0,:,:,:]+0.5) * 255.0).reshape((924,924,3)).astype(np.uint8)
 				Image.fromarray(input_sat_img).save("outputs/region_%d_input.png" % tile_id)
 
-				DecodeAndVis(output, "outputs/region_%d_output" % (tile_id), thr=0.05, edge_thr = 0.05, snap=True, imagesize = 2048)
+				DecodeAndVis(output, "outputs/region_%d_output" % (tile_id), thr=0.05, edge_thr = 0.05, snap=True, imagesize = 924)
 							
 				np.save("rawoutputs_%s/region_%d_output_raw" % (args.instance_id, tile_id), output)
 									
@@ -288,11 +288,15 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 	validation_data = []
 
 	test_size = 32
-
+	print("Loading Val Data...", time())
+ 	t0 = time()
 	for j in range(test_size/batch_size):
 		input_sat, gt_prob, gt_vector, gt_seg= dataloader_test.getBatch(batch_size)
 		validation_data.append([np.copy(input_sat), np.copy(gt_prob), np.copy(gt_vector), np.copy(gt_seg)])
 
+ 	t_load = time() - t0 
+	t0 = time()
+	print("Loaded in ", t_load)
 
 	step = args.init_step
 	lr = args.lr
@@ -315,9 +319,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 		t0 = time()
 		input_sat, gt_prob, gt_vector, gt_seg = dataloader_train.getBatch(batch_size)
 		t_load += time() - t0 
-		
 		t0 = time()
-
 		loss, grad_max, prob_loss, vector_loss,seg_loss, _ = model.Train(input_sat, gt_prob, gt_vector, gt_seg, lr)
 
 		sum_loss += loss
@@ -331,7 +333,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 				print("load model ", args.model_recover)
 				model.restoreModel(args.model_recover)
 
-		t_train += time() - t0 			
+		t_train += time() - t0
 
 		if step % 10 == 0:
 			sys.stdout.write("\rbatch:%d "%step + ">>" * ((step - (step/200)*200)/10) + "--" * (((step/200+1)*200-step)/10))
@@ -387,17 +389,13 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 			print("")
 			print("step", step, "loss", sum_loss, "test_loss", test_loss, "prob_loss", sum_prob_loss/200.0, "vector_loss", sum_vector_loss/200.0, "seg_loss", sum_seg_loss/200.0)
 			
-
 			sum_prob_loss = 0
 			sum_vector_loss = 0
 			sum_seg_loss = 0
 			sum_loss = 0 
 
-
-		if step > 0 and step % 400 == 0:
+		if step > 0 and step % 1000 == 0:
 			dataloader_train.preload(num=1024)
-
-
 
 		if step > 0 and step %2000 == 0:
 			
@@ -406,7 +404,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 			t_load = 0 
 			t_train = 0 
 
-		if step > 0 and (step % 10000 == 0):
+		if step > 0 and (step % 100000 == 0):
 			model.saveModel(model_save_folder + "model%d" % step)
 
 		if step > 0 and step % args.lr_decay_step == 0:
