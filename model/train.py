@@ -38,16 +38,16 @@ parser.add_argument('-model_recover', action='store', dest='model_recover', type
 
 
 parser.add_argument('-image_size', action='store', dest='image_size', type=int,
-                    help='instance_id ', required =False, default=308)
+                    help='instance_id ', required =False, default=352)
 
 parser.add_argument('-lr', action='store', dest='lr', type=float,
-                    help='learning rate', required =False, default=0.0000001)
+                    help='learning rate', required =False, default=0.0001)
 
 parser.add_argument('-lr_decay', action='store', dest='lr_decay', type=float,
                     help='learning rate decay', required =False, default=0.5)
 
 parser.add_argument('-lr_decay_step', action='store', dest='lr_decay_step', type=int,
-                    help='learning rate decay step', required =False, default=50000)
+                    help='learning rate decay step', required =False, default=80000)
 
 parser.add_argument('-init_step', action='store', dest='init_step', type=int,
                     help='initial step size ', required =False, default=0)
@@ -66,7 +66,7 @@ parser.add_argument('-spacenet', action='store', dest='spacenet', type=str,
                     help='spacenet folder', required =False, default="")
 
 parser.add_argument('-channel', action='store', dest='channel', type=int,
-                    help='channel', required =False, default=3)
+                    help='channel', required =False, default=12)
 
 parser.add_argument('-mode', action='store', dest='mode', type=str,
                     help='mode [train][test][validate]', required =False, default="train")
@@ -81,7 +81,7 @@ from datetime import datetime
 instance_id = args.instance_id + "_" + str(args.image_size) + "_" + str(args.resnet_step) + "_" + "_channel%d" % args.channel
 run = "run-"+datetime.today().strftime('%Y-%m-%d-%H-%M-%S')+"-"+instance_id
 
-oilwelldataset = "../data/oilwells"
+oilwelldataset = "../data/roadonly"
 osmdataset = "../data/20cities/"
 spacenetdataset = "../data/spacenet/"
 
@@ -404,7 +404,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 			t_load = 0 
 			t_train = 0 
 
-		if step > 0 and (step % 100000 == 0):
+		if step > 0 and (step % 10000 == 0):
 			model.saveModel(model_save_folder + "model%d" % step)
 
 		if step > 0 and step % args.lr_decay_step == 0:
